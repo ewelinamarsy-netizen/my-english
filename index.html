@@ -1,1 +1,214 @@
 
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#6750a4">
+<title>Angielski – moja nauka</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f5f2fb;color:#29243a;padding:18px}
+main{max-width:650px;margin:auto}
+h1{text-align:center;color:#6750a4}
+h2{font-size:19px}
+.card{background:white;padding:17px;border-radius:18px;margin:14px 0;box-shadow:0 3px 12px #0000000c}
+input,select,button{width:100%;padding:13px;margin:6px 0;border-radius:10px;border:1px solid #ddd;font-size:16px}
+button{background:#6750a4;color:white;border:0;font-weight:bold;cursor:pointer}
+button.secondary{background:#eee9f7;color:#493b70}
+button.danger{background:#b83c55}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.word{font-size:30px;text-align:center;font-weight:bold;margin:22px 0}
+.muted{color:#777;font-size:13px}
+#feedback{text-align:center;font-weight:bold;min-height:25px}
+.stats{display:flex;justify-content:space-around;text-align:center}
+.stats strong{display:block;font-size:24px;color:#6750a4}
+.hidden{display:none}
+li{margin:8px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>📚 Mój angielski</h1>
+
+<section class="card">
+<h2>📂 Kategorie</h2>
+<div class="row">
+<input id="newCategory" placeholder="Nowa kategoria">
+<button onclick="addCategory()">Dodaj</button>
+</div>
+<select id="category" onchange="renderWords()"></select>
+</section>
+
+<section class="card">
+<h2>➕ Dodaj słówko</h2>
+<input id="polish" placeholder="Słówko po polsku">
+<input id="english" placeholder="Słówko po angielsku">
+<button onclick="addWord()">Zapisz słówko</button>
+<p class="muted">Dodane słówka będą przypisane do wybranej kategorii.</p>
+</section>
+
+<section class="card">
+<h2>🧠 Nauka</h2>
+<div class="stats">
+<div><strong id="total">0</strong><span class="muted">Wszystkie</span></div>
+<div><strong id="mastered">0</strong><span class="muted">Opanowane</span></div>
+<div><strong id="due">0</strong><span class="muted">Do nauki</span></div>
+</div>
+<button onclick="startQuiz()">Rozpocznij naukę</button>
+<div id="quiz" class="hidden">
+<div class="muted" id="progress"></div>
+<div class="word" id="question"></div>
+<input id="answer" placeholder="Wpisz po angielsku" autocomplete="off">
+<button onclick="checkAnswer()">Sprawdź</button>
+<div id="feedback"></div>
+<button class="secondary" onclick="nextQuestion()">Dalej</button>
+</div>
+</section>
+
+<section class="card">
+<h2>📝 Moje słówka</h2>
+<ul id="wordList"></ul>
+</section>
+
+<section class="card">
+<h2>💾 Przenoszenie słówek na drugi telefon</h2>
+<button class="secondary" onclick="exportData()">Eksportuj słówka</button>
+<input type="file" id="importFile" accept=".json" onchange="importData(event)">
+<p class="muted">Eksportuj dane do pliku, a potem zaimportuj je na drugim telefonie. Postępy nauki nie synchronizują się automatycznie.</p>
+</section>
+</main>
+
+<script>
+const KEY="mojaNaukaAngielskiV1";
+let data=JSON.parse(localStorage.getItem(KEY)||"null")||{
+categories:["Ubrania","Jedzenie","Dom","Szkoła","Zwierzęta"],
+words:[]
+};
+let queue=[],current=null,answered=false,position=0;
+
+function save(){
+ localStorage.setItem(KEY,JSON.stringify(data));
+ updateStats();renderWords();
+}
+function selected(){return document.getElementById("category").value}
+function fillCategories(){
+ const s=document.getElementById("category"),old=s.value;
+ s.innerHTML="";
+ data.categories.forEach(c=>{
+  let o=document.createElement("option");o.value=c;o.textContent=c;s.appendChild(o);
+ });
+ if(data.categories.includes(old))s.value=old;
+}
+function addCategory(){
+ let v=document.getElementById("newCategory").value.trim();
+ if(!v)return;
+ if(data.categories.includes(v)){alert("Taka kategoria już istnieje.");return}
+ data.categories.push(v);
+ document.getElementById("newCategory").value="";
+ fillCategories();save();
+}
+function addWord(){
+ let p=document.getElementById("polish").value.trim();
+ let e=document.getElementById("english").value.trim();
+ if(!p||!e){alert("Wpisz oba słówka.");return}
+ data.words.push({id:Date.now()+Math.random(),category:selected(),pl:p,en:e,streak:0,mastered:false,due:0});
+ document.getElementById("polish").value="";
+ document.getElementById("english").value="";
+ save();
+}
+function renderWords(){
+ const ul=document.getElementById("wordList");ul.innerHTML="";
+ data.words.filter(w=>w.category===selected()).forEach(w=>{
+  let li=document.createElement("li");
+  li.textContent=w.pl+" — "+w.en+(w.mastered?" ✓ opanowane":"");
+  let b=document.createElement("button");b.textContent="Usuń";b.className="danger";
+  b.style.width="auto";b.style.padding="6px 10px";b.style.marginLeft="10px";
+  b.onclick=()=>{data.words=data.words.filter(x=>x.id!==w.id);save()};
+  li.appendChild(b);ul.appendChild(li);
+ });
+ updateStats();
+}
+function updateStats(){
+ let ws=data.words.filter(w=>w.category===selected());
+ document.getElementById("total").textContent=ws.length;
+ document.getElementById("mastered").textContent=ws.filter(w=>w.mastered).length;
+ document.getElementById("due").textContent=ws.filter(w=>!w.mastered&&w.due<=Date.now()).length;
+}
+function startQuiz(){
+ queue=data.words.filter(w=>w.category===selected()&&!w.mastered&&w.due<=Date.now());
+ if(!queue.length){alert("Nie ma teraz słówek do powtórki w tej kategorii. Dodaj słówka albo wróć później!");return}
+ queue.sort(()=>Math.random()-.5);
+ position=0;document.getElementById("quiz").classList.remove("hidden");showQuestion();
+}
+function showQuestion(){
+ current=queue[position];answered=false;
+ document.getElementById("question").textContent=current.pl;
+ document.getElementById("answer").value="";
+ document.getElementById("feedback").textContent="";
+ document.getElementById("progress").textContent="Słówko "+(position+1)+" z "+queue.length;
+ document.getElementById("answer").focus();
+}
+function checkAnswer(){
+ if(!current||answered)return;
+ let val=document.getElementById("answer").value.trim().toLowerCase();
+ if(!val)return;
+ answered=true;
+ if(val===current.en.toLowerCase()){
+  current.streak++;
+  let days=[1,3,7];
+  if(current.streak>=4){
+   current.mastered=true;
+   document.getElementById("feedback").textContent="🎉 Brawo! Słówko opanowane!";
+  }else{
+   current.due=Date.now()+days[current.streak-1]*86400000;
+   document.getElementById("feedback").textContent="✅ Dobrze! Kolejna powtórka za "+days[current.streak-1]+" dni.";
+  }
+ }else{
+  current.streak=0;current.due=Date.now();
+  document.getElementById("feedback").textContent="❌ Poprawna odpowiedź: "+current.en;
+  let later=Math.min(position+3,queue.length);
+  queue.splice(later,0,current);
+ }
+ save();
+}
+function nextQuestion(){
+ if(!current)return;
+ if(!answered){document.getElementById("feedback").textContent="Najpierw sprawdź odpowiedź.";return}
+ position++;
+ if(position>=queue.length){
+  document.getElementById("quiz").classList.add("hidden");
+  alert("Koniec nauki! Świetna robota! 🎉");
+  return;
+ }
+ showQuestion();
+}
+function exportData(){
+ let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+ let a=document.createElement("a");a.href=URL.createObjectURL(blob);
+ a.download="moje-slowka.json";a.click();URL.revokeObjectURL(a.href);
+}
+function importData(ev){
+ let f=ev.target.files[0];if(!f)return;
+ let r=new FileReader();
+ r.onload=()=>{
+  try{
+   let d=JSON.parse(r.result);
+   if(!Array.isArray(d.categories)||!Array.isArray(d.words))throw Error();
+   data=d;fillCategories();save();alert("Słówka zaimportowane!");
+  }catch(e){alert("Nie udało się odczytać pliku.");}
+ };
+ r.readAsText(f);
+}
+fillCategories();save();
+if("serviceWorker" in navigator){
+ window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+}
+document.getElementById("answer").addEventListener("keydown",e=>{
+ if(e.key==="Enter")checkAnswer();
+});
+</script>
+</body>
+</html>
